@@ -7,10 +7,8 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.92.1",
-    "bs58": "^5.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "helius-sdk": "^0.7.2"
+    "helius-sdk": "^1.5.1"
   }
 }
