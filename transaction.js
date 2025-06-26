@@ -1,62 +1,66 @@
+import 'dotenv/config';
+import { Helius } from 'helius-sdk';
 import {
-  Connection,
   Keypair,
-  TransactionMessage,
-  VersionedTransaction,
+  PublicKey,
   SystemProgram,
   LAMPORTS_PER_SOL,
-  PublicKey,
-} from "@solana/web3.js";
-import dotenv from "dotenv";
+} from '@solana/web3.js';
+import bs58 from 'bs58';
 
-dotenv.config();
+// === CONFIG ===
+const helius = new Helius(process.env.HELIUS_API_KEY);
+const token = process.env.TOKEN_ADDRESS;
+const recipient = process.env.RECIPIENT_WALLET;
 
-// Load wallet
-const secretKey = Uint8Array.from(
-  JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, "base64").toString())
-);
-const wallet = Keypair.fromSecretKey(secretKey);
-const connection = new Connection(process.env.HELIUS_RPC);
+// === Load Phantom-style base58 key ===
+const secretKeyBase58 = process.env.SOL_PRIVATE_KEY;
+const payer = Keypair.fromSecretKey(bs58.decode(secretKeyBase58));
 
-// Main function
-export async function handleTransaction(input) {
-  const { action, params } = input;
-  const { token, wallet: toWallet, amount, entry_price, symbol } = params;
+// === Sample TX Logic (Replace with dynamic input from n8n) ===
+const action = process.env.ACTION || 'HOLD'; // BUY, SELL, DCA, HOLD
+const amount = parseFloat(process.env.AMOUNT) || 0.01;
+const entryPrice = parseFloat(process.env.ENTRY_PRICE) || 0;
+const target = process.env.TARGET_WALLET || recipient;
 
-  console.log(`[${symbol}] Action: ${action}, Amount: ${amount}`);
+console.log(`🚀 Action: ${action} | Amount: ${amount} SOL`);
 
-  if (action === "HOLD") {
-    console.log("Action is HOLD — no transaction sent.");
-    return { success: true, message: "Held. No action taken." };
-  }
-
-  if (!["BUY", "SELL", "DCA"].includes(action)) {
-    throw new Error("Invalid action type.");
-  }
-
-  // Example transfer logic (replace with SPL/Jupiter swap if needed)
-  const toPubkey = new PublicKey(toWallet);
-  const lamports = amount * LAMPORTS_PER_SOL;
-
-  const ix = SystemProgram.transfer({
-    fromPubkey: wallet.publicKey,
-    toPubkey,
-    lamports,
-  });
-
-  const { blockhash } = await connection.getLatestBlockhash();
-
-  const msg = new TransactionMessage({
-    payerKey: wallet.publicKey,
-    recentBlockhash: blockhash,
-    instructions: [ix],
-  }).compileToV0Message();
-
-  const tx = new VersionedTransaction(msg);
-  tx.sign([wallet]);
-
-  const signature = await connection.sendTransaction(tx);
-  console.log(`${action} transaction sent: ${signature}`);
-
-  return { success: true, tx: signature };
+if (action === 'HOLD') {
+  console.log('⏸️ HOLD — No transaction will be made.');
+  process.exit(0);
 }
+
+// === Build Instructions ===
+const instructions = [];
+
+if (['BUY', 'DCA'].includes(action)) {
+  instructions.push(
+    SystemProgram.transfer({
+      fromPubkey: payer.publicKey,
+      toPubkey: new PublicKey(target),
+      lamports: Math.floor(amount * LAMPORTS_PER_SOL),
+    })
+  );
+} else if (action === 'SELL') {
+  instructions.push(
+    SystemProgram.transfer({
+      fromPubkey: payer.publicKey,
+      toPubkey: new PublicKey(target),
+      lamports: Math.floor(amount * LAMPORTS_PER_SOL),
+    })
+  );
+} else {
+  console.error('❌ Invalid action:', action);
+  process.exit(1);
+}
+
+// === Send Transaction ===
+(async () => {
+  try {
+    const sig = await helius.rpc.sendSmartTransaction(instructions, [payer]);
+    console.log('✅ Sent with signature:', sig);
+  } catch (err) {
+    console.error('❌ TX Error:', err.message);
+    process.exit(1);
+  }
+})();
