@@ -11,28 +11,32 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Load wallet
 const secretKey = Uint8Array.from(
   JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, "base64").toString())
 );
 const wallet = Keypair.fromSecretKey(secretKey);
 const connection = new Connection(process.env.HELIUS_RPC);
 
+// Main function
 export async function handleTransaction(input) {
-  const { action, allocated, token_address } = input;
+  const { action, params } = input;
+  const { token, wallet: toWallet, amount, entry_price, symbol } = params;
+
+  console.log(`[${symbol}] Action: ${action}, Amount: ${amount}`);
 
   if (action === "HOLD") {
-    console.log("No action taken (HOLD).");
-    return;
+    console.log("Action is HOLD — no transaction sent.");
+    return { success: true, message: "Held. No action taken." };
   }
 
   if (!["BUY", "SELL", "DCA"].includes(action)) {
-    console.log(`Unknown action: ${action}`);
-    return;
+    throw new Error("Invalid action type.");
   }
 
-  // For now we use a dummy transfer to represent the action
-  const toPubkey = new PublicKey(token_address);
-  const lamports = allocated * LAMPORTS_PER_SOL;
+  // Example transfer logic (replace with SPL/Jupiter swap if needed)
+  const toPubkey = new PublicKey(toWallet);
+  const lamports = amount * LAMPORTS_PER_SOL;
 
   const ix = SystemProgram.transfer({
     fromPubkey: wallet.publicKey,
@@ -41,6 +45,7 @@ export async function handleTransaction(input) {
   });
 
   const { blockhash } = await connection.getLatestBlockhash();
+
   const msg = new TransactionMessage({
     payerKey: wallet.publicKey,
     recentBlockhash: blockhash,
@@ -50,6 +55,8 @@ export async function handleTransaction(input) {
   const tx = new VersionedTransaction(msg);
   tx.sign([wallet]);
 
-  const txid = await connection.sendTransaction(tx);
-  console.log(`${action} transaction sent:`, txid);
+  const signature = await connection.sendTransaction(tx);
+  console.log(`${action} transaction sent: ${signature}`);
+
+  return { success: true, tx: signature };
 }
