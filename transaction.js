@@ -7,9 +7,19 @@ const app = express();
 app.use(bodyParser.json());
 
 const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=" + process.env.HELIUS_API_KEY, "confirmed");
-const secretKey = Uint8Array.from(
-  JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, 'base64').toString())
-);
+const base64Key = process.env.SOL_PRIVATE_KEY; // Or hardcode temporarily if needed
+try {
+  const decoded = Buffer.from(base64Key, 'base64').toString();
+  const parsed = JSON.parse(decoded);
+
+  if (!Array.isArray(parsed)) throw new Error("Parsed result is not an array");
+  if (parsed.length !== 64) throw new Error("Expected 64-byte key, got " + parsed.length);
+  if (!parsed.every(n => typeof n === 'number')) throw new Error("Array contains non-numbers");
+
+  console.log("✅ Key is valid format and safe to use.");
+} catch (e) {
+  console.error("❌ Key format error:", e.message);
+}
 const payer = Keypair.fromSecretKey(secretKey);
 
 app.post('/transaction', async (req, res) => {
