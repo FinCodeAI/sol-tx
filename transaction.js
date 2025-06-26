@@ -1,78 +1,55 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import { config } from 'dotenv';
 import {
   Connection,
   Keypair,
-  PublicKey,
-  SystemProgram,
   TransactionMessage,
   VersionedTransaction,
-  LAMPORTS_PER_SOL
-} from '@solana/web3.js';
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+} from "@solana/web3.js";
+import dotenv from "dotenv";
 
-config(); // Load .env
+dotenv.config();
 
-// 1. Setup Express server
-const app = express();
-app.use(bodyParser.json());
-
-// 2. Connect to Helius RPC
-const connection = new Connection(
-  `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`,
-  'confirmed'
-);
-
-// 3. Load and decode the wallet from .env
 const secretKey = Uint8Array.from(
-  JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, 'base64').toString())
+  JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, "base64").toString())
 );
-const fromKeypair = Keypair.fromSecretKey(secretKey);
+const wallet = Keypair.fromSecretKey(secretKey);
+const connection = new Connection(process.env.HELIUS_RPC);
 
-// 4. Transaction endpoint
-app.post('/send', async (req, res) => {
-  try {
-    const { to, amount } = req.body;
+export async function handleTransaction(input) {
+  const { action, allocated, token_address } = input;
 
-    if (!to || !amount) {
-      return res.status(400).json({ error: 'Missing "to" or "amount"' });
-    }
-
-    const toPubkey = new PublicKey(to);
-    const lamports = amount * LAMPORTS_PER_SOL;
-
-    // Build the instruction
-    const instruction = SystemProgram.transfer({
-      fromPubkey: fromKeypair.publicKey,
-      toPubkey,
-      lamports,
-    });
-
-    // Get recent blockhash
-    const { blockhash } = await connection.getLatestBlockhash('finalized');
-
-    // Compile message
-    const message = new TransactionMessage({
-      payerKey: fromKeypair.publicKey,
-      recentBlockhash: blockhash,
-      instructions: [instruction],
-    }).compileToV0Message();
-
-    // Sign and send
-    const tx = new VersionedTransaction(message);
-    tx.sign([fromKeypair]);
-
-    const signature = await connection.sendTransaction(tx);
-    return res.json({ signature });
-
-  } catch (err) {
-    console.error('❌ Transaction failed:', err);
-    res.status(500).json({ error: 'Transaction failed', detail: err.message });
+  if (action === "HOLD") {
+    console.log("No action taken (HOLD).");
+    return;
   }
-});
 
-// 5. Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+  if (!["BUY", "SELL", "DCA"].includes(action)) {
+    console.log(`Unknown action: ${action}`);
+    return;
+  }
+
+  // For now we use a dummy transfer to represent the action
+  const toPubkey = new PublicKey(token_address);
+  const lamports = allocated * LAMPORTS_PER_SOL;
+
+  const ix = SystemProgram.transfer({
+    fromPubkey: wallet.publicKey,
+    toPubkey,
+    lamports,
+  });
+
+  const { blockhash } = await connection.getLatestBlockhash();
+  const msg = new TransactionMessage({
+    payerKey: wallet.publicKey,
+    recentBlockhash: blockhash,
+    instructions: [ix],
+  }).compileToV0Message();
+
+  const tx = new VersionedTransaction(msg);
+  tx.sign([wallet]);
+
+  const txid = await connection.sendTransaction(tx);
+  console.log(`${action} transaction sent:`, txid);
+}
