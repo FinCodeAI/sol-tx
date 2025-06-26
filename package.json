@@ -10,7 +10,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "@solana/web3.js": "^1.92.1",
-    "bs58": "^5.0.0"
+    "bs58": "^5.0.0",
+    "dotenv": "^16.4.5"
   },
   "engines": {
     "node": ">=18.0.0"
