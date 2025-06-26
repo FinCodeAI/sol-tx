@@ -1,6 +1,5 @@
-// index.js
 import express from 'express';
-import transactionHandler from './transaction.js';
+import { transactionHandler } from './transaction.js';
 
 const app = express();
 app.use(express.json());
