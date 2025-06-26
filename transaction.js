@@ -7,7 +7,9 @@ const app = express();
 app.use(bodyParser.json());
 
 const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=" + process.env.HELIUS_API_KEY, "confirmed");
-const secretKey = Uint8Array.from(JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, 'base64').toString()));
+const secretKey = Uint8Array.from(
+  JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, 'base64').toString())
+);
 const payer = Keypair.fromSecretKey(secretKey);
 
 app.post('/transaction', async (req, res) => {
