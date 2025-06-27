@@ -64,7 +64,7 @@ export async function transactionHandler({ action, token, amount, percentage = n
       const pct = percentage || amount;
       if (!pct || pct <= 0 || pct > 1) throw new Error('Invalid percentage for sell/DCA');
 
-      const inAmount = Math.floor(balance * pct);
+      inAmount = Math.floor(balance * pct);
     }
     console.log("Token balance:", balance);
     console.log("Sell percentage:", percentage);
