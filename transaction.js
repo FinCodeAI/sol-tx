@@ -43,7 +43,6 @@ export async function transactionHandler({ action, token, amount, percentage, sl
     lamports = Math.floor(amount * LAMPORTS_PER_SOL);
   }
 
-
   // Handle DCA as 50% of amount
   if (action === 'DCA') {
     if (percentage != null) {
