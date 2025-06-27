@@ -36,8 +36,10 @@ export async function transactionHandler({ action, token, amount, slippage = 10 
     `token_out_address=${tokenOut}&` +
     `in_amount=${lamports}&` +
     `from_address=${wallet}&` +
-    `slippage=${slippage}`);
-
+    `slippage=${slippage}&` +
+    `fee=0.002&` +
+    `is_anti_mev=true`
+  );
   const route = await routeRes.json();
   if (route.code !== 0 || !route.data?.raw_tx?.swapTransaction) {
     throw new Error(route.msg || 'Failed to get swap route');
