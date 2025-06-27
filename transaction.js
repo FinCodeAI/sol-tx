@@ -20,12 +20,28 @@ export async function transactionHandler({ action, token, amount, percentage, sl
     return { status: 'HOLD', message: 'No transaction performed' };
   }
 
-  // Handle SELL with percentage
+  // Handle SELL with percentage 
+  /*
   if (action === 'SELL' && percentage != null) {
     const tokenBalance = await fetchTokenBalance(token, wallet);
     if (tokenBalance === 0) throw new Error('Token balance is zero');
     amount = tokenBalance * percentage;
+  }*/
+  let lamports;
+
+  if (action === 'SELL') {
+    const balance = await fetchTokenBalance(token, wallet);
+    if (!balance || balance <= 0) throw new Error('Insufficient token balance');
+
+    const pct = amount; // 1 = 100%, 0.5 = 50%
+    if (!pct || pct <= 0 || pct > 1) throw new Error('Invalid sell percentage');
+
+    const sellAmount = balance * pct;
+    lamports = Math.floor(sellAmount * LAMPORTS_PER_SOL);
+  } else {
+    lamports = Math.floor(amount * LAMPORTS_PER_SOL);
   }
+
 
   // Handle DCA as 50% of amount
   if (action === 'DCA') {
