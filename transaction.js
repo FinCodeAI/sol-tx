@@ -20,12 +20,22 @@ export async function transactionHandler({ action, token, amount, percentage, sl
     return { status: 'HOLD', message: 'No transaction performed' };
   }
 
-  // Handle SELL with percentage 
+  // Handle SELL with percentage
+  /* 
   if (action === 'SELL' && percentage != null) {
     const tokenBalance = await fetchTokenBalance(token, wallet);
     if (tokenBalance === 0) throw new Error('Token balance is zero');
     amount = tokenBalance * percentage;
-  }
+  }*/
+  if (action === 'SELL' && percentage != null) {
+  const tokenBalance = await fetchTokenBalance(token, wallet);
+  if (tokenBalance === 0) throw new Error('Token balance is zero');
+
+  amount = tokenBalance * percentage;
+
+  // DEBUG
+  console.log(`💰 Selling ${percentage * 100}% of ${tokenBalance} tokens = ${amount}`);
+}
 
   // Handle DCA as 50% of amount
   if (action === 'DCA') {
@@ -38,9 +48,8 @@ export async function transactionHandler({ action, token, amount, percentage, sl
     }
   }
   const isSell = action === 'SELL';
-  const lamports = Math.floor(
-    amount * (isSell ? Math.pow(10, 6) : LAMPORTS_PER_SOL)
-  ).toString();
+  // ⚠️ Use 6 decimals for token → lamports (not for SOL)
+  const lamports = Math.floor(amount * Math.pow(10, 6)).toString();
 
   const tokenIn = isSell ? token : 'So11111111111111111111111111111111111111112';
   const tokenOut = isSell ? 'So11111111111111111111111111111111111111112' : token;
