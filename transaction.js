@@ -36,7 +36,7 @@ async function fetchTokenBalance(tokenAddress, walletAddress) {
 
   if (!accounts || accounts.length === 0) return 0;
 
-  return parseFloat(accounts[0].account.data.parsed.info.tokenAmount.uiAmount) || 0;
+  return parseInt(accounts[0].account.data.parsed.info.tokenAmount.amount) || 0;
 }
 
 export async function transactionHandler({ action, token, amount, percentage = null, slippage = 10 }) {
@@ -64,7 +64,7 @@ export async function transactionHandler({ action, token, amount, percentage = n
       const pct = percentage || amount;
       if (!pct || pct <= 0 || pct > 1) throw new Error('Invalid percentage for sell/DCA');
 
-      inAmount = Math.floor(balance * pct * 1_000_000) / 1_000_000;
+      const inAmount = Math.floor(balance * pct);
     }
     console.log("Token balance:", balance);
     console.log("Sell percentage:", percentage);
