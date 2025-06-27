@@ -13,7 +13,7 @@ import bs58 from 'bs58';
 import fetch from 'node-fetch';
 
 async function fetchTokenBalance(tokenAddress, walletAddress) {
-  const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.Sparrowfast}`;
+  const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_KEY}`;
   const body = {
     jsonrpc: '2.0',
     id: '1',
