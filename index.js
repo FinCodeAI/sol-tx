@@ -1,3 +1,4 @@
+// index.js
 import express from 'express';
 import { transactionHandler } from './transaction.js';
 
@@ -9,8 +10,8 @@ app.post('/tx', async (req, res) => {
     const result = await transactionHandler(req.body);
     res.json(result);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Transaction failed' });
+    console.error('[Transaction Error]', e);
+    res.status(500).json({ error: 'Transaction failed', details: e.message });
   }
 });
 
