@@ -56,9 +56,9 @@ export async function transactionHandler({ action, token, amount, percentage = n
 
     let inAmount = amount;
     let balance = 0;
-    
+
     if (action === 'DCA' || action === 'SELL') {
-      const balance = await fetchTokenBalance(token, wallet);
+      balance = await fetchTokenBalance(token, wallet);
       if (!balance || balance <= 0) throw new Error('Insufficient token balance');
 
       const pct = percentage || amount;
