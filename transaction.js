@@ -9,7 +9,7 @@ import {
   LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 
-export async function transactionHandler({ action, token, amount, slippage = 10 }) {
+export async function transactionHandler({ action, token, amount, percentage, slippage = 10 }) {
   const payer = Keypair.fromSecretKey(bs58.decode(process.env.SOL_PRIVATE_KEY));
   const wallet = payer.publicKey.toBase58();
   const connection = new Connection(process.env.SOLANA_RPC);
@@ -20,8 +20,22 @@ export async function transactionHandler({ action, token, amount, slippage = 10 
     return { status: 'HOLD', message: 'No transaction performed' };
   }
 
+  // Handle SELL with percentage
+  if (action === 'SELL' && percentage != null) {
+    const tokenBalance = await fetchTokenBalance(token, wallet);
+    if (tokenBalance === 0) throw new Error('Token balance is zero');
+    amount = tokenBalance * percentage;
+  }
+
+  // Handle DCA as 50% of amount
   if (action === 'DCA') {
-    amount = amount / 2; // Example: halve the amount
+    if (percentage != null) {
+      const tokenBalance = await fetchTokenBalance(token, wallet);
+      if (tokenBalance === 0) throw new Error('Token balance is zero');
+      amount = tokenBalance * percentage;
+    } else {
+      amount = amount / 2;
+    }
   }
 
   const lamports = Math.floor(amount * LAMPORTS_PER_SOL).toString();
@@ -71,4 +85,32 @@ export async function transactionHandler({ action, token, amount, slippage = 10 
     amount,
     slippage
   };
+}
+
+// Helper to fetch token balance
+async function fetchTokenBalance(tokenAddress, walletAddress) {
+  const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+  const body = {
+    jsonrpc: '2.0',
+    id: '1',
+    method: 'getTokenAccountsByOwner',
+    params: [
+      walletAddress,
+      { mint: tokenAddress },
+      { encoding: 'jsonParsed' }
+    ]
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  const json = await res.json();
+  const accounts = json.result?.value;
+
+  if (!accounts || accounts.length === 0) return 0;
+
+  return parseFloat(accounts[0].account.data.parsed.info.tokenAmount.uiAmount) || 0;
 }
