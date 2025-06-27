@@ -1,79 +1,82 @@
-import dotenv from 'dotenv';
-import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
-import bs58 from 'bs58';
+// transaction.js
 import fetch from 'node-fetch';
+import bs58 from 'bs58';
+import {
+  VersionedTransaction,
+} from '@solana/web3.js';
 
-dotenv.config();
+const RPC_ENDPOINT = 'https://mainnet.helius-rpc.com/?api-key=' + process.env.HELIUS_KEY;
+const GMGN_BASE_URL = 'https://gmgn.ai/defi';
 
-const connection = new Connection(process.env.SOLANA_RPC_URL, 'confirmed');
-const secretKey = bs58.decode(process.env.SOL_PRIVATE_KEY);
-const user = Keypair.fromSecretKey(secretKey);
-const gmgnApiBase = 'https://gmgn.ai/defi/router/v1/sol/tx';
+export async function transactionHandler(input) {
+  const { token, amount, action } = input;
+  const fromAddress = process.env.SOL_PUBLIC_KEY;
+  const privateKey = Uint8Array.from(JSON.parse(Buffer.from(process.env.SOL_PRIVATE_KEY, 'base64').toString()));
+  const slippage = 10;
+  const fee = 0.002;
 
-export async function transactionHandler({ token, amount, action }) {
-  try {
-    const baseToken = 'So11111111111111111111111111111111111111112'; // wSOL
-    const inputToken = action === 'SELL' ? token : baseToken;
-    const outputToken = action === 'SELL' ? baseToken : token;
+  let tokenIn, tokenOut;
 
-    let amountInLamports;
-
-    if (action === 'DCA') {
-      // Fetch holding balance
-      const holding = await connection.getTokenAccountsByOwner(user.publicKey, {
-        mint: token,
-      });
-      if (!holding.value.length) throw new Error('No tokens found in wallet.');
-      
-      const parsed = await connection.getParsedAccountInfo(holding.value[0].pubkey);
-      const tokenAmount = parsed.value.data.parsed.info.tokenAmount.uiAmount;
-
-      // Get token price from route
-      const priceRes = await fetch(
-        `${gmgnApiBase}/get_swap_route?token_in_address=${token}&token_out_address=${baseToken}&in_amount=1&from_address=${user.publicKey}&slippage=10`
-      );
-      const priceData = await priceRes.json();
-      const tokenPrice = priceData?.routes?.[0]?.outAmount || 0;
-
-      const dcaTokens = tokenAmount * 0.1;
-      amountInLamports = Math.floor(dcaTokens * tokenPrice);
-    } else if (action === 'HOLD') {
-      return { status: 'HOLD', reason: 'No action performed' };
-    } else {
-      amountInLamports = Math.floor(amount * 1e9); // SOL to lamports
-    }
-
-    const swapUrl = `${gmgnApiBase}/get_swap_route?token_in_address=${inputToken}&token_out_address=${outputToken}&in_amount=${amountInLamports}&from_address=${user.publicKey}&slippage=10`;
-    const routeRes = await fetch(swapUrl);
-    const routeData = await routeRes.json();
-
-    if (!routeData?.transaction) {
-      throw new Error('Swap route unavailable');
-    }
-
-    const swapTx = routeData.transaction;
-    const txBuffer = Buffer.from(swapTx, 'base64');
-    const transaction = VersionedTransaction.deserialize(txBuffer);
-
-    transaction.sign([user]);
-
-    const sig = await connection.sendTransaction(transaction, {
-      skipPreflight: true,
-      maxRetries: 3,
-    });
-
-    return {
-      status: action,
-      txHash: sig,
-      token,
-      amount: amountInLamports / 1e9,
-      slippage: 10,
-    };
-  } catch (err) {
-    console.error(err);
-    return {
-      error: 'Transaction failed',
-      details: err.message || err.toString(),
-    };
+  if (action === 'BUY') {
+    tokenIn = 'So11111111111111111111111111111111111111112'; // SOL
+    tokenOut = token;
+  } else if (action === 'SELL' || action === 'DCA') {
+    tokenIn = token;
+    tokenOut = 'So11111111111111111111111111111111111111112';
+  } else if (action === 'HOLD') {
+    return { status: 'HOLD', reason: 'No transaction needed' };
+  } else {
+    throw new Error('Unsupported action');
   }
+
+  // DCA logic: reduce amount to 10%
+  let finalAmount = amount;
+  if (action === 'DCA') {
+    finalAmount = amount * 0.1;
+  }
+
+  const routeUrl = `${GMGN_BASE_URL}/router/v1/sol/tx/get_swap_route` +
+    `?token_in_address=${tokenIn}` +
+    `&token_out_address=${tokenOut}` +
+    `&in_amount=${finalAmount}` +
+    `&from_address=${fromAddress}` +
+    `&slippage=${slippage}` +
+    `&fee=${fee}` +
+    `&is_anti_mev=true`;
+
+  const routeRes = await fetch(routeUrl);
+  const route = await routeRes.json();
+
+  if (!route?.data?.raw_tx?.swapTransaction) {
+    throw new Error('Invalid route response from GMGN');
+  }
+
+  const rawTx = route.data.raw_tx.swapTransaction;
+  const messageBuffer = Buffer.from(rawTx, 'base64');
+  const transaction = VersionedTransaction.deserialize(messageBuffer);
+  transaction.sign([{
+    publicKey: transaction.message.staticAccountKeys[0],
+    secretKey: privateKey,
+  }]);
+
+  const txProxyUrl = `${GMGN_BASE_URL}/txproxy/v1/send_transaction`;
+  const txRes = await fetch(txProxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transaction: bs58.encode(transaction.serialize()) })
+  });
+
+  const txResult = await txRes.json();
+
+  if (!txResult?.data?.txHash) {
+    throw new Error('Transaction submission failed');
+  }
+
+  return {
+    status: action,
+    txHash: txResult.data.txHash,
+    token,
+    amount: finalAmount,
+    slippage,
+  };
 }
