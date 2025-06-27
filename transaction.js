@@ -16,7 +16,7 @@ const payer = Keypair.fromSecretKey(bs58.decode(process.env.SOL_PRIVATE_KEY));
 const walletAddress = payer.publicKey.toBase58();
 
 async function fetchTokenBalance(tokenAddress) {
-  const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+  const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.Sparrowfast}`;
   const body = {
     jsonrpc: '2.0',
     id: '1',
@@ -64,20 +64,19 @@ export async function transactionHandler({ token, amount, action }) {
       sellAmount = currentBalance * amount; // `amount` is treated as % (e.g. 0.1 for 10%)
     }
 
-    const routeUrl = `https://gmgn.ai/defi/router/v1/sol/tx/get_swap_route?` +
+    // Step 1: Get route from GMGN
+    const routeRes = await fetch(`https://gmgn.ai/defi/router/v1/sol/tx/get_swap_route?` +
       `token_in_address=${tokenIn}&` +
       `token_out_address=${tokenOut}&` +
-      `in_amount=${sellAmount}&` +
-      `from_address=${walletAddress}&` +
-      `slippage=10&` +
+      `in_amount=${lamports}&` +
+      `from_address=${wallet}&` +
+      `slippage=${slippage}&` +
       `fee=0.002&` +
-      `is_anti_mev=true`;
-
-    const routeRes = await fetch(routeUrl);
+      `is_anti_mev=true`
+    );
     const route = await routeRes.json();
-
-    if (!route?.data?.transaction) {
-      throw new Error('No transaction found in route response');
+    if (route.code !== 0 || !route.data?.raw_tx?.swapTransaction) {
+      throw new Error(route.msg || 'Failed to get swap route');
     }
 
     const txBuf = Buffer.from(route.data.transaction, 'base64');
