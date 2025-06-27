@@ -33,12 +33,13 @@ export async function transactionHandler({ action, token, amount, percentage, sl
     const balance = await fetchTokenBalance(token, wallet);
     if (!balance || balance <= 0) throw new Error('Insufficient token balance');
 
-    const pct = amount; // 1 = 100%, 0.5 = 50%
+    const pct = amount;
     if (!pct || pct <= 0 || pct > 1) throw new Error('Invalid sell percentage');
 
     const sellAmount = balance * pct;
     lamports = Math.floor(sellAmount * LAMPORTS_PER_SOL);
   } else {
+    if (!amount || amount <= 0) throw new Error('Invalid amount');
     lamports = Math.floor(amount * LAMPORTS_PER_SOL);
   }
 
