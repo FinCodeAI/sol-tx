@@ -6,16 +6,13 @@ import {
   Keypair,
   PublicKey,
   VersionedTransaction,
+  LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 
 import bs58 from 'bs58';
 import fetch from 'node-fetch';
 
-const connection = new Connection(process.env.SOLANA_RPC, 'confirmed');
-const payer = Keypair.fromSecretKey(bs58.decode(process.env.SOL_PRIVATE_KEY));
-const walletAddress = payer.publicKey.toBase58();
-
-async function fetchTokenBalance(tokenAddress) {
+async function fetchTokenBalance(tokenAddress, walletAddress) {
   const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.Sparrowfast}`;
   const body = {
     jsonrpc: '2.0',
@@ -39,11 +36,14 @@ async function fetchTokenBalance(tokenAddress) {
 
   if (!accounts || accounts.length === 0) return 0;
 
-  const amount = parseFloat(accounts[0].account.data.parsed.info.tokenAmount.uiAmount);
-  return amount || 0;
+  return parseFloat(accounts[0].account.data.parsed.info.tokenAmount.uiAmount) || 0;
 }
 
-export async function transactionHandler({ token, amount, action }) {
+export async function transactionHandler({ action, token, amount, percentage = null, slippage = 10 }) {
+  const payer = Keypair.fromSecretKey(bs58.decode(process.env.SOL_PRIVATE_KEY));
+  const wallet = payer.publicKey.toBase58();
+  const connection = new Connection(process.env.SOLANA_RPC);
+
   try {
     if (!token || !action) throw new Error('Missing parameters');
 
@@ -54,42 +54,47 @@ export async function transactionHandler({ token, amount, action }) {
       return { status: 'HOLD', reason: 'No transaction needed' };
     }
 
-    let sellAmount = amount;
+    let inAmount = amount;
 
-    // Handle DCA and SELL percentage logic
     if (action === 'DCA' || action === 'SELL') {
-      const currentBalance = await fetchTokenBalance(token);
-      if (!currentBalance || currentBalance <= 0) throw new Error('Insufficient token balance');
+      const balance = await fetchTokenBalance(token, wallet);
+      if (!balance || balance <= 0) throw new Error('Insufficient token balance');
 
-      sellAmount = currentBalance * amount; // `amount` is treated as % (e.g. 0.1 for 10%)
+      const pct = percentage || amount;
+      if (!pct || pct <= 0 || pct > 1) throw new Error('Invalid percentage for sell/DCA');
+
+      inAmount = balance * pct;
     }
 
-    // Step 1: Get route from GMGN
-    const routeRes = await fetch(`https://gmgn.ai/defi/router/v1/sol/tx/get_swap_route?` +
+    const lamports = Math.round(inAmount * LAMPORTS_PER_SOL);
+
+    // Step 1: Get swap route from GMGN
+    const routeUrl = `https://gmgn.ai/defi/router/v1/sol/tx/get_swap_route?` +
       `token_in_address=${tokenIn}&` +
       `token_out_address=${tokenOut}&` +
       `in_amount=${lamports}&` +
       `from_address=${wallet}&` +
-      `slippage=${slippage}&` +
-      `fee=0.002&` +
-      `is_anti_mev=true`
-    );
+      `slippage=${slippage}&fee=0.002&is_anti_mev=true`;
+
+    const routeRes = await fetch(routeUrl);
     const route = await routeRes.json();
-    if (route.code !== 0 || !route.data?.raw_tx?.swapTransaction) {
-      throw new Error(route.msg || 'Failed to get swap route');
+
+    const txBase64 = route.data?.transaction || route.data?.raw_tx?.swapTransaction;
+    if (route.code !== 0 || !txBase64) {
+      throw new Error(route.msg || 'Failed to get swap transaction');
     }
 
-    const txBuf = Buffer.from(route.data.transaction, 'base64');
+    const txBuf = Buffer.from(txBase64, 'base64');
     const tx = VersionedTransaction.deserialize(txBuf);
     tx.sign([payer]);
 
-    const sig = await connection.sendTransaction(tx);
+    const signature = await connection.sendTransaction(tx);
     return {
       status: action,
-      txHash: sig,
+      txHash: signature,
       token,
-      amount: action === 'SELL' || action === 'DCA' ? sellAmount : amount,
-      slippage: 10
+      amount: inAmount,
+      slippage
     };
   } catch (error) {
     console.error('[TX ERROR]', error);
