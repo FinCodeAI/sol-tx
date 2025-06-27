@@ -38,7 +38,9 @@ export async function transactionHandler({ action, token, amount, percentage, sl
     }
   }
 
-  const lamports = Math.floor(amount * LAMPORTS_PER_SOL).toString();
+  const lamports = Math.floor(
+    amount * (isSell ? Math.pow(10, 6) : LAMPORTS_PER_SOL)
+  ).toString();
   const isSell = action === 'SELL';
 
   const tokenIn = isSell ? token : 'So11111111111111111111111111111111111111112';
