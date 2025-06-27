@@ -55,7 +55,8 @@ export async function transactionHandler({ action, token, amount, percentage = n
     }
 
     let inAmount = amount;
-
+    let balance = 0;
+    
     if (action === 'DCA' || action === 'SELL') {
       const balance = await fetchTokenBalance(token, wallet);
       if (!balance || balance <= 0) throw new Error('Insufficient token balance');
@@ -67,7 +68,7 @@ export async function transactionHandler({ action, token, amount, percentage = n
     }
     console.log("Token balance:", balance);
     console.log("Sell percentage:", percentage);
-    console.log("Calculated amount to sell:", sellAmount);
+    console.log("Calculated amount to sell:", inAmount);
 
     const lamports = Math.round(inAmount * LAMPORTS_PER_SOL);
 
