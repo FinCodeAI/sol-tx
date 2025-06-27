@@ -65,6 +65,9 @@ export async function transactionHandler({ action, token, amount, percentage = n
 
       inAmount = balance * pct;
     }
+    console.log("Token balance:", balance);
+    console.log("Sell percentage:", percentage);
+    console.log("Calculated amount to sell:", sellAmount);
 
     const lamports = Math.round(inAmount * LAMPORTS_PER_SOL);
 
